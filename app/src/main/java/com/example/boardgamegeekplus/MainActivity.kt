@@ -4,65 +4,189 @@ import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
-import android.content.Context
-import android.content.ContentValues
+import android.os.AsyncTask
 import android.view.View
-import android.widget.EditText
 import android.widget.TextView
-import android.widget.Toast
 import java.net.URL
 
-import android.util.Xml
-import android.widget.TableRow
-import okhttp3.*
 import org.w3c.dom.Document
+import org.w3c.dom.Element
+import org.w3c.dom.Node
 import org.w3c.dom.NodeList
-import org.xmlpull.v1.XmlPullParser
-import java.io.IOException
-import java.io.InputStream
-import java.util.*
+import java.io.*
+import java.net.MalformedURLException
 import javax.xml.parsers.DocumentBuilderFactory
 
 class MainActivity : AppCompatActivity() {
     lateinit var userNameMain: TextView
-
-    private val client = OkHttpClient()
+    lateinit var countGames: TextView
+    lateinit var countAddons: TextView
+    lateinit var lastSyncDate: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         userNameMain = findViewById(R.id.userNameMain)
+        countGames = findViewById(R.id.countGames)
+        countAddons = findViewById(R.id.countAddons)
+        lastSyncDate = findViewById(R.id.lastSyncDate)
 
 
         userNameMain.text = SharedData.userName
+        downloadData()
+    }
+
+    @Suppress("DEPRECATION")
+    private inner class DataDownloader: AsyncTask<String, Int, String>() {
+        override fun onPreExecute() {
+            super.onPreExecute()
+        }
+
+        override fun onPostExecute(result: String?) {
+            super.onPostExecute(result)
+            loadData()
+            showData()
+        }
+
+        override fun doInBackground(vararg p0: String?): String {
+            try {
+                val gameUrl = URL("https://boardgamegeek.com/xmlapi2/collection?username=" + SharedData.userName + "&type=user&stats=1")
+                val connection = gameUrl.openConnection()
+                connection.connect()
+
+                val lengthOfFile = connection.contentLength
+                val isStream = gameUrl.openStream()
+                val testDirectory = File("$filesDir/XML")
+                if (!testDirectory.exists()) testDirectory.mkdir()
+                val fos = FileOutputStream("$testDirectory/data.xml")
+                val data = ByteArray(1024)
+                var count = 0
+                var total: Long = 0
+                var progress = 0
+                count = isStream.read(data)
+                while (count != -1) {
+                    total += count.toLong()
+                    val progress_temp = total.toInt() * 100 / lengthOfFile
+                    if (progress_temp % 10 == 0 && progress != progress_temp) {
+                        progress = progress_temp
+                    }
+                    fos.write(data, 0, count)
+                    count = isStream.read(data)
+                }
+                isStream.close()
+                fos.close()
+            } catch (e: MalformedURLException) {
+                return "Wrong URL Error"
+            } catch (e: FileNotFoundException) {
+                return "No file Error"
+            } catch (e: IOException) {
+                return "IO Error"
+            }
+            return "success"
+        }
+    }
+
+    fun downloadData() {
+        val dd = DataDownloader()
+        dd.execute()
     }
 
     fun syncData(v: View) {
-        val gameUrl = "https://boardgamegeek.com/xmlapi2/collection?username=" + SharedData.userName + "&type=user&stats=1"
-        val request = Request.Builder().url(gameUrl).build()
 
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {}
-            override fun onResponse(call: Call, response: Response) {
-                val xmlString = response.body()?.string()
-
-                val xmlFactory = DocumentBuilderFactory.newInstance()
-                val xmlBuilder = xmlFactory.newDocumentBuilder()
-                val xml = xmlBuilder.parse(xmlString)
-//                val xml: Document = .newInstance().newDocumentBuilder().parse(xmlString)
-
-//                xml.documentElement.normalize()
-//
-//                val items: NodeList = xml.getElementsByTagName("image")
-
-                println(xml)
-                userNameMain.text = "hujwieco"
-////                pasteHere.appe
-            }
-
-        })
     }
+
+    fun loadData() {
+        val fileName = "data.xml"
+        val path = filesDir
+        val inDir = File(path, "XML")
+
+        if (inDir.exists()) {
+            val file = File(inDir, fileName)
+            if (file.exists()) {
+                val xml: Document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file)
+                xml.documentElement.normalize()
+
+                var ranks_i = 0
+
+                var count_games = 0
+                var count_addons = 0
+
+                val items: NodeList = xml.getElementsByTagName("item")
+                val ranks: NodeList = xml.getElementsByTagName("rank")
+
+                for (i in 0 until items.length) {
+                    var itemNode: Node = items.item(i)
+
+                    if (itemNode.getAttributes().getNamedItem("subtype").getNodeValue() == "boardgame") count_games++
+                    else count_addons++
+
+                    var itemName = ""
+                    var itemYear = ""
+                    var itemImage = ""
+                    var itemRank = ""
+
+                    if (itemNode.nodeType == Node.ELEMENT_NODE) {
+                        itemNode = itemNode as Element
+                        val childrenNodes = itemNode.childNodes
+
+                        for (j in 0 until childrenNodes.length) {
+                            val childNode = childrenNodes.item(j)
+                            if (childNode is Element) {
+                                when (childNode.nodeName) {
+                                    "name" -> {
+                                        itemName = childNode.textContent
+                                    }
+                                    "yearpublished" -> {
+                                        itemYear = childNode.textContent
+                                    }
+                                    "thumbnail" -> {
+                                        itemImage = childNode.textContent
+                                    }
+                                }
+                            }
+                        }
+
+                        while (true) {
+                            val rankNode: Node = ranks.item(ranks_i)
+                            ranks_i++
+                            if (rankNode.getAttributes().getNamedItem("name").getNodeValue() == "boardgame") {
+                                itemRank = rankNode.getAttributes().getNamedItem("value").getNodeValue()
+                                break
+                            }
+                        }
+                    }
+                    println(itemName)
+                    println(itemYear)
+                    println(itemImage)
+                    println(itemRank)
+                }
+
+
+
+                countGames.text = count_games.toString()
+                countAddons.text = count_addons.toString()
+            }
+        }
+    }
+
+    fun showData() {
+
+    }
+}
+//        val xmlFactory = DocumentBuilderFactory.newInstance()
+//        val xmlBuilder = xmlFactory.newDocumentBuilder()
+//        val xml = xmlBuilder.parse(xmlString)
+////                val xml: Document = .newInstance().newDocumentBuilder().parse(xmlString)
+//
+////                xml.documentElement.normalize()
+////
+////                val items: NodeList = xml.getElementsByTagName("image")
+//
+//        println(xml)
+//        userNameMain.text = "hujwieco"
+
+
 
 //    fun lookupGame(v: View) {
 //        val gameUrl = "https://boardgamegeek.com/xmlapi2/search?query=" + productName.text + "&type=boardgame"
@@ -78,11 +202,6 @@ class MainActivity : AppCompatActivity() {
 //
 //        })
 //    }
-
-
-
-
-
 
 //    fun newProduct(v: View) {
 //        val dbHandler = MyDBHandler(this, null, null, 1)
@@ -127,8 +246,6 @@ class MainActivity : AppCompatActivity() {
 //            productID.text = "Nie znaleziono"
 //        }
 //    }
-
-}
 
 
 //class MyDBHandler(context: Context, name: String?, factory: SQLiteDatabase.CursorFactory?, version: Int)

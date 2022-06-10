@@ -10,13 +10,27 @@
     <TextView
         android:id="@+id/userNameMain"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="hfghjufghj" />
+        android:layout_height="wrap_content" />
+
+    <TextView
+        android:id="@+id/countGames"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
+    <TextView
+        android:id="@+id/countAddons"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
+    <TextView
+        android:id="@+id/lastSyncDate"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
 
     <Button
         android:id="@+id/buttonSyncData"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:onClick="syncData"
-        android:text="Button" />
+        android:text="Sync data" />
 </LinearLayout>
