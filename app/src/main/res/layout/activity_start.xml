@@ -4,19 +4,20 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".MainActivity"
+    tools:context=".StartActivity"
     android:orientation="vertical">
 
-    <TextView
-        android:id="@+id/userNameMain"
-        android:layout_width="match_parent"
+    <EditText
+        android:id="@+id/userName"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="hfghjufghj" />
+        android:ems="10"
+        android:inputType="textPersonName" />
 
     <Button
-        android:id="@+id/buttonSyncData"
-        android:layout_width="match_parent"
+        android:id="@+id/buttonConfirm"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:onClick="syncData"
-        android:text="Button" />
+        android:onClick="switchToMain"
+        android:text="Confirm" />
 </LinearLayout>
