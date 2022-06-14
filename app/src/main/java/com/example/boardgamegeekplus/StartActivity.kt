@@ -19,13 +19,13 @@ class StartActivity : AppCompatActivity() {
     fun switchToMain(v: View) {
         SharedData.userName = userName.text.toString()
 
-        //println(SharedData.userName)
-
         val intent = Intent(this, MainActivity::class.java)
         startActivity(intent)
     }
 }
 
 object SharedData {
-    var userName = "huj"
+    var userName = ""
+    var lastSyncDate = ""
+    var sync = false
 }

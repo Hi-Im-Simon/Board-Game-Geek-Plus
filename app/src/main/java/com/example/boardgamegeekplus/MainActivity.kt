@@ -1,11 +1,18 @@
 package com.example.boardgamegeekplus
 
+import android.annotation.SuppressLint
+import android.content.ContentValues
+import android.content.Context
+import android.content.Intent
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import android.os.AsyncTask
+import android.os.Handler
+import android.os.Looper
 import android.view.View
+import android.widget.Button
 import android.widget.TextView
 import java.net.URL
 
@@ -15,6 +22,9 @@ import org.w3c.dom.Node
 import org.w3c.dom.NodeList
 import java.io.*
 import java.net.MalformedURLException
+import java.text.SimpleDateFormat
+import java.time.LocalDateTime
+import java.util.*
 import javax.xml.parsers.DocumentBuilderFactory
 
 class MainActivity : AppCompatActivity() {
@@ -22,6 +32,7 @@ class MainActivity : AppCompatActivity() {
     lateinit var countGames: TextView
     lateinit var countAddons: TextView
     lateinit var lastSyncDate: TextView
+    lateinit var buttonSyncData: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -31,14 +42,31 @@ class MainActivity : AppCompatActivity() {
         countGames = findViewById(R.id.countGames)
         countAddons = findViewById(R.id.countAddons)
         lastSyncDate = findViewById(R.id.lastSyncDate)
+        buttonSyncData = findViewById(R.id.buttonSyncData)
 
+        userNameMain.text = "Użytkownik " + SharedData.userName + " "
 
-        userNameMain.text = SharedData.userName
-        downloadData()
+        val dbHandler = MyDBHandler(this, null, null, 1)
+        if (SharedData.sync || !dbHandler.checkUser(SharedData.userName)) {
+            downloadData()
+            SharedData.sync = false
+        }
+        showData()
     }
 
+    fun switchToGames(v: View) {
+        val intent = Intent(this, GamesActivity::class.java)
+        startActivity(intent)
+    }
+
+    fun switchToAddons(v: View) {
+        val intent = Intent(this, AddonsActivity::class.java)
+        startActivity(intent)
+    }
+
+    @SuppressLint("StaticFieldLeak")
     @Suppress("DEPRECATION")
-    private inner class DataDownloader: AsyncTask<String, Int, String>() {
+    private inner class DataDownloader : AsyncTask<String, Int, String>() {
         override fun onPreExecute() {
             super.onPreExecute()
         }
@@ -46,7 +74,6 @@ class MainActivity : AppCompatActivity() {
         override fun onPostExecute(result: String?) {
             super.onPostExecute(result)
             loadData()
-            showData()
         }
 
         override fun doInBackground(vararg p0: String?): String {
@@ -93,7 +120,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun syncData(v: View) {
+        val dbHandler = MyDBHandler(this, null, null, 1)
+        SharedData.lastSyncDate = dbHandler.getLastSyncDate()
 
+        val intent = Intent(this, SyncActivity::class.java)
+        startActivity(intent)
+//        downloadData()
     }
 
     fun loadData() {
@@ -102,9 +134,15 @@ class MainActivity : AppCompatActivity() {
         val inDir = File(path, "XML")
 
         if (inDir.exists()) {
+            val dbHandler = MyDBHandler(this, null, null, 1)
+            dbHandler.clearUserData(SharedData.userName)
+
+            val currentTime = SimpleDateFormat("dd/M/yyyy HH:mm:ss", Locale.GERMANY).format(Date()).toString()
+
             val file = File(inDir, fileName)
             if (file.exists()) {
-                val xml: Document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file)
+                val xml: Document =
+                    DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file)
                 xml.documentElement.normalize()
 
                 var ranks_i = 0
@@ -118,13 +156,18 @@ class MainActivity : AppCompatActivity() {
                 for (i in 0 until items.length) {
                     var itemNode: Node = items.item(i)
 
-                    if (itemNode.getAttributes().getNamedItem("subtype").getNodeValue() == "boardgame") count_games++
+                    var itemIsgame = 0
+
+                    if (itemNode.getAttributes().getNamedItem("subtype").getNodeValue() == "boardgame") {
+                        count_games++
+                        itemIsgame = 1
+                    }
                     else count_addons++
 
                     var itemName = ""
-                    var itemYear = ""
+                    var itemYear = 0
                     var itemImage = ""
-                    var itemRank = ""
+                    var itemRank = 0
 
                     if (itemNode.nodeType == Node.ELEMENT_NODE) {
                         itemNode = itemNode as Element
@@ -138,7 +181,7 @@ class MainActivity : AppCompatActivity() {
                                         itemName = childNode.textContent
                                     }
                                     "yearpublished" -> {
-                                        itemYear = childNode.textContent
+                                        itemYear = childNode.textContent.toInt()
                                     }
                                     "thumbnail" -> {
                                         itemImage = childNode.textContent
@@ -151,193 +194,176 @@ class MainActivity : AppCompatActivity() {
                             val rankNode: Node = ranks.item(ranks_i)
                             ranks_i++
                             if (rankNode.getAttributes().getNamedItem("name").getNodeValue() == "boardgame") {
-                                itemRank = rankNode.getAttributes().getNamedItem("value").getNodeValue()
+                                val itemRankTemp = rankNode.getAttributes().getNamedItem("value").getNodeValue().toIntOrNull()
+                                if (itemRankTemp != null) itemRank = itemRankTemp
+                                else itemRank = 0
                                 break
                             }
                         }
                     }
-                    println(itemName)
-                    println(itemYear)
-                    println(itemImage)
-                    println(itemRank)
+
+                    val game = Game(itemName, itemYear, itemImage, itemRank, itemIsgame)
+
+                    dbHandler.addGame(game, SharedData.userName, currentTime)
                 }
-
-
-
-                countGames.text = count_games.toString()
-                countAddons.text = count_addons.toString()
             }
         }
+        showData()
     }
 
     fun showData() {
+        val dbHandler = MyDBHandler(this, null, null, 1)
 
+        countGames.text = "Liczba gier: " + dbHandler.listItems("games").size
+        countAddons.text = "Liczba dodatków: " + dbHandler.listItems("addons").size
+        lastSyncDate.text = "Data ostatniej synchronizacji: " + dbHandler.getLastSyncDate()
     }
 }
-//        val xmlFactory = DocumentBuilderFactory.newInstance()
-//        val xmlBuilder = xmlFactory.newDocumentBuilder()
-//        val xml = xmlBuilder.parse(xmlString)
-////                val xml: Document = .newInstance().newDocumentBuilder().parse(xmlString)
-//
-////                xml.documentElement.normalize()
-////
-////                val items: NodeList = xml.getElementsByTagName("image")
-//
-//        println(xml)
-//        userNameMain.text = "hujwieco"
+
+class MyDBHandler(context: Context, name: String?, factory: SQLiteDatabase.CursorFactory?, version: Int)
+    : SQLiteOpenHelper(context, DATABASE_NAME, factory, DATABASE_VERSION) {
+    companion object {
+        private val DATABASE_VERSION = 1
+        private val DATABASE_NAME = "gamesDB.db"
+        val TABLE_GAMES = "games"
+        val COLUMN_ID = "_id"
+        val COLUMN_NAME = "name"
+        val COLUMN_YEAR = "year"
+        val COLUMN_IMAGE = "image"
+        val COLUMN_RANK = "rank"
+        val COLUMN_ISGAME = "isgame"
+        val COLUMN_USER = "user"
+        val COLUMN_SYNCTIME = "synctime"
+
+    }
+
+    override fun onCreate(db: SQLiteDatabase) {
+        val CREATE_GAMES_TABLE = (
+            "CREATE TABLE " + TABLE_GAMES
+            + "("
+            + COLUMN_ID + " INTEGER PRIMARY KEY AUTOINCREMENT,"
+            + COLUMN_NAME + " TEXT,"
+            + COLUMN_YEAR + " INTEGER,"
+            + COLUMN_IMAGE + " TEXT,"
+            + COLUMN_RANK + " INTEGER,"
+            + COLUMN_ISGAME + " INTEGER,"
+            + COLUMN_USER + " TEXT,"
+            + COLUMN_SYNCTIME + " TEXT"
+            + ")"
+        )
+        db.execSQL(CREATE_GAMES_TABLE)
+    }
+
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        db.execSQL("DROP TABLE IF EXISTS $TABLE_GAMES")
+        onCreate(db)
+    }
+
+    fun clearUserData(userName: String) {
+        val db = this.writableDatabase
+        db.execSQL("DROP TABLE IF EXISTS $TABLE_GAMES")
+        onCreate(db)
+    }
+
+    fun addGame(game: Game, userName: String, syncTime: String) {
+        val values = ContentValues()
+        values.put(COLUMN_NAME, game.name)
+        values.put(COLUMN_YEAR, game.year)
+        values.put(COLUMN_IMAGE, game.image)
+        values.put(COLUMN_RANK, game.rank)
+        values.put(COLUMN_ISGAME, game.isgame)
+        values.put(COLUMN_USER, userName)
+        values.put(COLUMN_SYNCTIME, syncTime)
+
+        val db = this.writableDatabase
+        db.insert(TABLE_GAMES, null, values)
+        db.close()
+    }
+
+    fun listItems(type: String): MutableList<Game> {
+        val games: MutableList<Game> = emptyArray<Game>().toMutableList()
+
+        var query = ""
+
+        if (type == "games") {
+            query = "SELECT * FROM $TABLE_GAMES WHERE $COLUMN_ISGAME = 1"
+        }
+        else if (type == "addons") {
+            query = "SELECT * FROM $TABLE_GAMES WHERE $COLUMN_ISGAME = 0"
+        }
+
+        val db = this.writableDatabase
+        val cursor = db.rawQuery(query, null)
+
+        if (cursor.moveToFirst()) {
+            do {
+                val game = Game()
+                game.id = cursor.getInt(cursor.getColumnIndexOrThrow("_id"))
+                game.name = cursor.getString(cursor.getColumnIndexOrThrow("name"))
+                game.year = cursor.getInt(cursor.getColumnIndexOrThrow("year"))
+                game.image = cursor.getString(cursor.getColumnIndexOrThrow("image"))
+                game.rank = cursor.getInt(cursor.getColumnIndexOrThrow("rank"))
+                games.add(game)
+            } while (cursor.moveToNext())
+            cursor.close()
+        }
+        db.close()
+        return games
+    }
+
+    fun checkUser(newUserName: String) : Boolean {
+        val query = "SELECT $COLUMN_USER FROM $TABLE_GAMES WHERE $COLUMN_ID = 1"
+        val db = this.writableDatabase
+        val cursor = db.rawQuery(query, null)
+
+        if (cursor.moveToFirst()) {
+            return cursor.getString(cursor.getColumnIndexOrThrow("user")) == newUserName
+        }
+        return false
+    }
+
+    fun getLastSyncDate() : String {
+        val query = "SELECT $COLUMN_SYNCTIME FROM $TABLE_GAMES WHERE $COLUMN_ID = 1"
+        val db = this.writableDatabase
+        val cursor = db.rawQuery(query, null)
+
+        if (cursor.moveToFirst()) {
+            return cursor.getString(cursor.getColumnIndexOrThrow("synctime"))
+        }
+        return "false"
+    }
+}
 
 
+class Game {
+    var id: Int = 0
+    var name: String? = null
+    var year: Int = 0
+    var image: String? = null
+    var rank: Int = 0
+    var isgame: Int = 0
 
-//    fun lookupGame(v: View) {
-//        val gameUrl = "https://boardgamegeek.com/xmlapi2/search?query=" + productName.text + "&type=boardgame"
-//        val request = Request.Builder().url(gameUrl).build()
-//
-//        client.newCall(request).enqueue(object : Callback {
-//            override fun onFailure(call: Call, e: IOException) {}
-//            override fun onResponse(call: Call, response: Response) {
-//                val xml = response.body()?.string()
-//                println(xml)
-////                pasteHere.appe
-//            }
-//
-//        })
-//    }
+    constructor(id: Int, name: String, year: Int, image: String, rank: Int, isgame: Int) {
+        this.id = id
+        this.name = name
+        this.year = year
+        this.image = image
+        this.rank = rank
+        this.isgame = isgame
+    }
 
-//    fun newProduct(v: View) {
-//        val dbHandler = MyDBHandler(this, null, null, 1)
-//        val quantityStr = productQuantity.text.toString()
-//
-//        if (quantityStr == "") {
-//            Toast.makeText(this, "Wybierz ilość", Toast.LENGTH_SHORT).show()
-//            return
-//        }
-//
-//        val quantity = Integer.parseInt(quantityStr)
-//        val product = Product(productName.text.toString(), quantity)
-//
-//        dbHandler.addProduct(product)
-//        productName.setText("")
-//        productQuantity.setText("")
-//        productID.setText("")
-//        Toast.makeText(this, "Produkt dodano do bazy", Toast.LENGTH_SHORT).show()
-//    }
-//
-//    fun lookupProduct(v: View) {
-//        val dbHandler = MyDBHandler(this, null, null, 1)
-//        val product = dbHandler.findProduct(productName.text.toString())
-//
-//        if (product != null) {
-//            productID.text = product.id.toString()
-//            productQuantity.setText(product.quantity.toString())
-//        } else {
-//            productID.text = "Nie znaleziono"
-//        }
-//    }
-//
-//    fun removeProduct(v: View) {
-//        val dbHandler = MyDBHandler(this, null, null, 1)
-//        val result = dbHandler.deleteProduct(productName.text.toString())
-//
-//        if (result) {
-//            productID.text = "Produkt usunięty"
-//            productName.setText("")
-//            productQuantity.setText("")
-//        } else {
-//            productID.text = "Nie znaleziono"
-//        }
-//    }
+    constructor(name: String, year: Int, image: String, rank: Int, isgame: Int) {
+        this.name = name
+        this.year = year
+        this.image = image
+        this.rank = rank
+        this.isgame = isgame
+    }
 
-
-//class MyDBHandler(context: Context, name: String?, factory: SQLiteDatabase.CursorFactory?, version: Int)
-//    : SQLiteOpenHelper(context, DATABASE_NAME, factory, DATABASE_VERSION) {
-//    companion object {
-//        private val DATABASE_VERSION = 1
-//        private val DATABASE_NAME = "gamesDB.db"
-//        val TABLE_GAMES = "games"
-//        val COLUMN_ID = "_id"
-//        val COLUMN_NAME = "name"
-//        val COLUMN_NAMEORIGINAL = "nameoriginal"
-//        val COLUMN_RELEASEDATE = "releasedate"
-//        val COLUMN_BGGID = "bgg_id"
-//        val COLUMN_RANK = "rank"
-//    }
-//
-//    override fun onCreate(db: SQLiteDatabase) {
-//        val CREATE_GAMES_TABLE = (
-//            "CREATE TABLE " + TABLE_GAMES
-//            + "("
-//            + COLUMN_ID + " INTEGER PRIMARY KEY,"
-//            + COLUMN_NAME + " TEXT,"
-//            + COLUMN_NAMEORIGINAL + " TEXT,"
-//            + COLUMN_RELEASEDATE + " INTEGER"
-//            + COLUMN_BGGID + " INTEGER"
-//            + COLUMN_RANK + " INTEGER"
-//            + ")"
-//        )
-//        db.execSQL(CREATE_GAMES_TABLE)
-//    }
-//
-////    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-////        db.execSQL("DROP TABLE IF EXISTS $TABLE_GAMES")
-////        onCreate(db)
-////    }
-////
-////    fun addProduct(product: Product) {
-////        val values = ContentValues()
-////        values.put(COLUMN_PRODUCTNAME, product.productName)
-////        values.put(COLUMN_QUANTITY, product.quantity)
-////        val db = this.writableDatabase
-////        db.insert(TABLE_PRODUCTS, null, values)
-////        db.close()
-////    }
-////
-////    fun findProduct(productname: String): Product? {
-////        val query = "SELECT * FROM $TABLE_PRODUCTS WHERE $COLUMN_PRODUCTNAME LIKE \"$productname\""
-////        val db = this.writableDatabase
-////        val cursor = db.rawQuery(query, null)
-////        var product: Product? = null
-////
-////        if (cursor.moveToFirst()) {
-////            val id = Integer.parseInt(cursor.getString(0))
-////            val name = cursor.getString(1)
-////            val quantity = cursor.getInt(2)
-////            product = Product(id, name, quantity)
-////            cursor.close()
-////        }
-////        db.close()
-////        return product
-////    }
-////
-////    fun deleteProduct(productname: String) : Boolean {
-////        var result = false
-////        val query = "SELECT * FROM $TABLE_PRODUCTS WHERE $COLUMN_PRODUCTNAME LIKE \"$productname\""
-////        val db = this.writableDatabase
-////        val cursor = db.rawQuery(query, null)
-////        if (cursor.moveToFirst()) {
-////            val id = cursor.getInt(0)
-////            db.delete(TABLE_PRODUCTS, COLUMN_ID+ " = ?", arrayOf(id.toString()))
-////            cursor.close()
-////            result=true
-////        }
-////        db.close()
-////        return result
-////    }
-//}
-
-
-//class Product {
-//    var id: Int = 0
-//    var productName: String? = null
-//    var quantity: Int = 0
-//
-//    constructor(id: Int, productname: String, quantity: Int) {
-//        this.id = id
-//        this.productName = productname
-//        this.quantity = quantity
-//    }
-//
-//    constructor(productname: String, quantity: Int) {
-//        this.productName = productname
-//        this.quantity = quantity
-//    }
-//}
+    constructor() {
+        this.name = ""
+        this.year = 0
+        this.image = ""
+        this.rank = 0
+    }
+}

@@ -10,27 +10,65 @@
     <TextView
         android:id="@+id/userNameMain"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content" />
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="25px"
+        android:textAlignment="center"
+        android:textSize="24sp" />
 
-    <TextView
-        android:id="@+id/countGames"
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content" />
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
 
-    <TextView
-        android:id="@+id/countAddons"
+        <TextView
+            android:id="@+id/countGames"
+            android:layout_width="216dp"
+            android:layout_height="wrap_content"
+            android:textSize="16sp" />
+
+        <Button
+            android:id="@+id/buttonGameList"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:onClick="switchToGames"
+            android:text="Lista gier" />
+
+    </LinearLayout>
+
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content" />
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/countAddons"
+            android:layout_width="216dp"
+            android:layout_height="wrap_content"
+            android:textSize="16sp" />
+
+        <Button
+            android:id="@+id/buttonAddonList"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:onClick="switchToAddons"
+            android:text="Lista dodatków" />
+    </LinearLayout>
 
     <TextView
         android:id="@+id/lastSyncDate"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content" />
+        android:layout_height="wrap_content"
+        android:layout_marginTop="50px"
+        android:layout_marginBottom="20px"
+        android:textAlignment="center"
+        android:textSize="16sp" />
 
     <Button
         android:id="@+id/buttonSyncData"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:onClick="syncData"
-        android:text="Sync data" />
+        android:text="Synchronizacja" />
 </LinearLayout>
