@@ -1,6 +1,5 @@
 package com.example.boardgamegeekplus
 
-import android.annotation.SuppressLint
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -8,24 +7,10 @@ import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
-import android.os.AsyncTask
-import android.os.Handler
-import android.os.Looper
 import android.view.View
 import android.widget.Button
 import android.widget.TextView
-import java.net.URL
-
-import org.w3c.dom.Document
-import org.w3c.dom.Element
-import org.w3c.dom.Node
-import org.w3c.dom.NodeList
-import java.io.*
-import java.net.MalformedURLException
-import java.text.SimpleDateFormat
-import java.time.LocalDateTime
-import java.util.*
-import javax.xml.parsers.DocumentBuilderFactory
+import kotlin.system.exitProcess
 
 class MainActivity : AppCompatActivity() {
     lateinit var userNameMain: TextView
@@ -47,9 +32,9 @@ class MainActivity : AppCompatActivity() {
         userNameMain.text = "Użytkownik " + SharedData.userName + " "
 
         val dbHandler = MyDBHandler(this, null, null, 1)
-        if (SharedData.sync || !dbHandler.checkUser(SharedData.userName)) {
-            downloadData()
-            SharedData.sync = false
+        if (!dbHandler.checkUser(SharedData.userName)) {
+            SharedData.userUpToDate = false
+            syncData()
         }
         showData()
     }
@@ -64,151 +49,21 @@ class MainActivity : AppCompatActivity() {
         startActivity(intent)
     }
 
-    @SuppressLint("StaticFieldLeak")
-    @Suppress("DEPRECATION")
-    private inner class DataDownloader : AsyncTask<String, Int, String>() {
-        override fun onPreExecute() {
-            super.onPreExecute()
-        }
-
-        override fun onPostExecute(result: String?) {
-            super.onPostExecute(result)
-            loadData()
-        }
-
-        override fun doInBackground(vararg p0: String?): String {
-            try {
-                val gameUrl = URL("https://boardgamegeek.com/xmlapi2/collection?username=" + SharedData.userName + "&type=user&stats=1")
-                val connection = gameUrl.openConnection()
-                connection.connect()
-
-                val lengthOfFile = connection.contentLength
-                val isStream = gameUrl.openStream()
-                val testDirectory = File("$filesDir/XML")
-                if (!testDirectory.exists()) testDirectory.mkdir()
-                val fos = FileOutputStream("$testDirectory/data.xml")
-                val data = ByteArray(1024)
-                var count = 0
-                var total: Long = 0
-                var progress = 0
-                count = isStream.read(data)
-                while (count != -1) {
-                    total += count.toLong()
-                    val progress_temp = total.toInt() * 100 / lengthOfFile
-                    if (progress_temp % 10 == 0 && progress != progress_temp) {
-                        progress = progress_temp
-                    }
-                    fos.write(data, 0, count)
-                    count = isStream.read(data)
-                }
-                isStream.close()
-                fos.close()
-            } catch (e: MalformedURLException) {
-                return "Wrong URL Error"
-            } catch (e: FileNotFoundException) {
-                return "No file Error"
-            } catch (e: IOException) {
-                return "IO Error"
-            }
-            return "success"
-        }
-    }
-
-    fun downloadData() {
-        val dd = DataDownloader()
-        dd.execute()
-    }
-
     fun syncData(v: View) {
-        val dbHandler = MyDBHandler(this, null, null, 1)
-        SharedData.lastSyncDate = dbHandler.getLastSyncDate()
-
         val intent = Intent(this, SyncActivity::class.java)
         startActivity(intent)
-//        downloadData()
     }
 
-    fun loadData() {
-        val fileName = "data.xml"
-        val path = filesDir
-        val inDir = File(path, "XML")
+    fun syncData() {
+        val intent = Intent(this, SyncActivity::class.java)
+        startActivity(intent)
+    }
 
-        if (inDir.exists()) {
-            val dbHandler = MyDBHandler(this, null, null, 1)
-            dbHandler.clearUserData(SharedData.userName)
-
-            val currentTime = SimpleDateFormat("dd/M/yyyy HH:mm:ss", Locale.GERMANY).format(Date()).toString()
-
-            val file = File(inDir, fileName)
-            if (file.exists()) {
-                val xml: Document =
-                    DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file)
-                xml.documentElement.normalize()
-
-                var ranks_i = 0
-
-                var count_games = 0
-                var count_addons = 0
-
-                val items: NodeList = xml.getElementsByTagName("item")
-                val ranks: NodeList = xml.getElementsByTagName("rank")
-
-                for (i in 0 until items.length) {
-                    var itemNode: Node = items.item(i)
-
-                    var itemIsgame = 0
-
-                    if (itemNode.getAttributes().getNamedItem("subtype").getNodeValue() == "boardgame") {
-                        count_games++
-                        itemIsgame = 1
-                    }
-                    else count_addons++
-
-                    var itemName = ""
-                    var itemYear = 0
-                    var itemImage = ""
-                    var itemRank = 0
-
-                    if (itemNode.nodeType == Node.ELEMENT_NODE) {
-                        itemNode = itemNode as Element
-                        val childrenNodes = itemNode.childNodes
-
-                        for (j in 0 until childrenNodes.length) {
-                            val childNode = childrenNodes.item(j)
-                            if (childNode is Element) {
-                                when (childNode.nodeName) {
-                                    "name" -> {
-                                        itemName = childNode.textContent
-                                    }
-                                    "yearpublished" -> {
-                                        itemYear = childNode.textContent.toInt()
-                                    }
-                                    "thumbnail" -> {
-                                        itemImage = childNode.textContent
-                                    }
-                                }
-                            }
-                        }
-
-                        while (true) {
-                            val rankNode: Node = ranks.item(ranks_i)
-                            ranks_i++
-                            if (rankNode.getAttributes().getNamedItem("name").getNodeValue() == "boardgame") {
-                                val itemRankTemp = rankNode.getAttributes().getNamedItem("value").getNodeValue().toIntOrNull()
-                                if (itemRankTemp != null) itemRank = itemRankTemp
-                                else itemRank = 0
-                                break
-                            }
-                        }
-                    }
-
-                    val game = Game(itemName, itemYear, itemImage, itemRank, itemIsgame)
-
-                    dbHandler.addGame(game, SharedData.userName, currentTime)
-                }
-            }
-        }
-        showData()
+    fun clearData(v: View) {
+        val dbHandler = MyDBHandler(this, null, null, 1)
+        dbHandler.clearUserData()
+        moveTaskToBack(true)
+        exitProcess(-1)
     }
 
     fun showData() {
@@ -259,7 +114,7 @@ class MyDBHandler(context: Context, name: String?, factory: SQLiteDatabase.Curso
         onCreate(db)
     }
 
-    fun clearUserData(userName: String) {
+    fun clearUserData() {
         val db = this.writableDatabase
         db.execSQL("DROP TABLE IF EXISTS $TABLE_GAMES")
         onCreate(db)
@@ -280,16 +135,16 @@ class MyDBHandler(context: Context, name: String?, factory: SQLiteDatabase.Curso
         db.close()
     }
 
-    fun listItems(type: String): MutableList<Game> {
+    fun listItems(type: String, listBy: String = "_id"): MutableList<Game> {
         val games: MutableList<Game> = emptyArray<Game>().toMutableList()
 
         var query = ""
 
         if (type == "games") {
-            query = "SELECT * FROM $TABLE_GAMES WHERE $COLUMN_ISGAME = 1"
+            query = "SELECT * FROM $TABLE_GAMES WHERE $COLUMN_ISGAME = 1 ORDER BY $listBy"
         }
         else if (type == "addons") {
-            query = "SELECT * FROM $TABLE_GAMES WHERE $COLUMN_ISGAME = 0"
+            query = "SELECT * FROM $TABLE_GAMES WHERE $COLUMN_ISGAME = 0 ORDER BY $listBy"
         }
 
         val db = this.writableDatabase
@@ -330,7 +185,7 @@ class MyDBHandler(context: Context, name: String?, factory: SQLiteDatabase.Curso
         if (cursor.moveToFirst()) {
             return cursor.getString(cursor.getColumnIndexOrThrow("synctime"))
         }
-        return "false"
+        return "nigdy"
     }
 }
 

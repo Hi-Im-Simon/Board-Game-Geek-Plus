@@ -37,7 +37,7 @@
             android:layout_marginLeft="10px"
             android:layout_marginRight="10px"
             android:onClick="switchToMain"
-            android:text="Wróć do menu" />
+            android:text="Wyjdź do menu" />
     </LinearLayout>
 
 

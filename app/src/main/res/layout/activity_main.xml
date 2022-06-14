@@ -71,4 +71,11 @@
         android:layout_height="wrap_content"
         android:onClick="syncData"
         android:text="Synchronizacja" />
+
+    <Button
+        android:id="@+id/buttonClearData"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:onClick="clearData"
+        android:text="Wyczyść dane" />
 </LinearLayout>

@@ -7,11 +7,6 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.squareup.picasso.Picasso
-import org.simpleframework.xml.Text
-import org.w3c.dom.Document
-import org.w3c.dom.Element
-import javax.xml.parsers.DocumentBuilder
-import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.math.min
 
 class GamesActivity : AppCompatActivity() {
@@ -24,6 +19,7 @@ class GamesActivity : AppCompatActivity() {
     var games: MutableList<Game> = emptyArray<Game>().toMutableList()
 
     var pageID = 0
+    var gameIDLocal = 1
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,13 +37,31 @@ class GamesActivity : AppCompatActivity() {
         loadData()
     }
 
+    fun sortDefault(v: View) {
+        val dbHandler = MyDBHandler(this, null, null, 1)
+        games = dbHandler.listItems("games")
+        loadData()
+    }
+
+    fun sortName(v: View) {
+        val dbHandler = MyDBHandler(this, null, null, 1)
+        games = dbHandler.listItems("games", "name")
+        loadData()
+    }
+
+    fun sortRank(v: View) {
+        val dbHandler = MyDBHandler(this, null, null, 1)
+        games = dbHandler.listItems("games", "rank")
+        loadData()
+    }
+
     private fun loadData() {
         if (games.size == 0) {
             titleEmpty.text = "Nie posiadasz żadnych gier!"
             return
         }
         for (i in pageID * 4 until min(pageID * 4 + 4, games.size)) {
-            itemIDs[i % 4].text = games[i].id.toString()
+            itemIDs[i % 4].text = (pageID * 4 + (i % 4) + 1).toString()
             itemNames[i % 4].text = games[i].name
             Picasso.get().load(games[i].image).into(itemImages[i % 4])
             itemRanks[i % 4].text = "Ranking: " + games[i].rank.toString()
@@ -57,6 +71,7 @@ class GamesActivity : AppCompatActivity() {
     fun switchBack(v: View) {
         if (pageID > 0) {
             pageID--
+            gameIDLocal -= 4
             loadData()
         }
     }
